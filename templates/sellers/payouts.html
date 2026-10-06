@@ -1,0 +1,100 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Payouts | Top Tech{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-12">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-1">{{ profile.store_name }}</h1>
+    <p class="text-gray-500 mb-8">Seller Dashboard</p>
+
+    {% include 'sellers/_nav.html' with active='payouts' %}
+
+    {% if messages %}
+        <div class="mb-6 space-y-2">
+            {% for message in messages %}
+                <p class="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <div class="bg-white rounded-xl shadow p-6 border-2 border-indigo-100">
+            <p class="text-xs font-semibold text-indigo-500 uppercase mb-2">Available Balance</p>
+            <p class="text-2xl font-bold text-indigo-600">₦{{ available_balance }}</p>
+            <p class="text-xs text-gray-400 mt-1">From delivered orders - ready to withdraw</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-6">
+            <p class="text-xs font-semibold text-gray-400 uppercase mb-2">Pending Balance</p>
+            <p class="text-2xl font-bold text-yellow-600">₦{{ pending_earnings }}</p>
+            <p class="text-xs text-gray-400 mt-1">From orders not yet delivered</p>
+        </div>
+    </div>
+
+    <div class="mb-8">
+        <form method="post" action="{% url 'sellers:payout_request' %}">
+            {% csrf_token %}
+            <button type="submit"
+                    {% if has_pending_request or available_balance <= 0 %}disabled{% endif %}
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg transition
+                           disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
+                Request Payout
+            </button>
+        </form>
+        {% if has_pending_request %}
+            <p class="text-xs text-gray-400 mt-2">You already have a payout request pending review.</p>
+        {% elif available_balance <= 0 %}
+            <p class="text-xs text-gray-400 mt-2">No available balance to withdraw yet.</p>
+        {% endif %}
+    </div>
+
+    <h2 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">Payout History</h2>
+
+    {% if payouts %}
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-400 uppercase border-b border-gray-100">
+                        <th class="px-5 py-4 font-semibold">Amount</th>
+                        <th class="px-5 py-4 font-semibold">Status</th>
+                        <th class="px-5 py-4 font-semibold">Requested</th>
+                        <th class="px-5 py-4 font-semibold">Processed</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for payout in payouts %}
+                    <tr>
+                        <td class="px-5 py-4 font-semibold text-gray-800">₦{{ payout.amount }}</td>
+                        <td class="px-5 py-4">
+                            <span class="inline-block px-2.5 py-1 rounded-full text-xs font-semibold
+                                {% if payout.status == 'paid' %}
+                                    bg-green-50 text-green-700
+                                {% elif payout.status == 'requested' %}
+                                    bg-yellow-50 text-yellow-700
+                                {% else %}
+                                    bg-red-50 text-red-700
+                                {% endif %}">
+                                {{ payout.get_status_display }}
+                            </span>
+                            {% if payout.status == 'failed' and payout.failure_reason %}
+                                <p class="text-xs text-red-500 mt-1">{{ payout.failure_reason }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-4 text-gray-500">{{ payout.created_at|date:"M d, Y" }}</td>
+                        <td class="px-5 py-4 text-gray-500">{{ payout.processed_at|date:"M d, Y"|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400 bg-white rounded-xl shadow">
+        <i class="fa-solid fa-money-bill-transfer text-4xl mb-3"></i>
+        <p>No payout requests yet.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

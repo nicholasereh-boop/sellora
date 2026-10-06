@@ -1,0 +1,124 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Affiliate Links | Top Tech{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-12">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-1">Affiliate Dashboard</h1>
+    <p class="text-gray-500 mb-8">Code: <span class="font-semibold text-gray-700">{{ profile.affiliate_code }}</span></p>
+
+    {% include 'affiliates/_nav.html' with active='links' %}
+
+    {% if messages %}
+        <div class="mb-6 space-y-2">
+            {% for message in messages %}
+                <p class="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <h2 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">Your Links</h2>
+
+    {% if links %}
+    <div class="bg-white rounded-xl shadow overflow-hidden mb-10">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-gray-400 uppercase border-b border-gray-100">
+                        <th class="px-5 py-4 font-semibold">Product</th>
+                        <th class="px-5 py-4 font-semibold">Commission</th>
+                        <th class="px-5 py-4 font-semibold">Clicks</th>
+                        <th class="px-5 py-4 font-semibold">Conversions</th>
+                        <th class="px-5 py-4 font-semibold">Earnings</th>
+                        <th class="px-5 py-4"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for link in links %}
+                    <tr>
+                        <td class="px-5 py-4">
+                            <a href="{% url 'catalog:product_detail' link.product.slug %}" class="font-medium text-gray-800 hover:text-indigo-600">
+                                {{ link.product.name }}
+                            </a>
+                        </td>
+                        <td class="px-5 py-4 text-gray-600">{{ link.commission_rate }}%</td>
+                        <td class="px-5 py-4 text-gray-600">{{ link.click_count }}</td>
+                        <td class="px-5 py-4 text-gray-600">{{ link.conversion_count }}</td>
+                        <td class="px-5 py-4 font-semibold text-gray-800">₦{{ link.earnings }}</td>
+                        <td class="px-5 py-4 text-right whitespace-nowrap">
+                            <button type="button"
+                                    onclick="copyLink(this, '{{ request.scheme }}://{{ request.get_host }}{{ link.target_url }}')"
+                                    class="text-indigo-600 hover:underline text-xs font-semibold">
+                                Copy Link
+                            </button>
+                            <a href="{% url 'catalog:product_detail' link.product.slug %}" class="text-gray-500 hover:underline text-xs font-semibold ml-3">
+                                View Product
+                            </a>
+                            <a href="{% url 'affiliates:link_detail' link.id %}" class="text-gray-500 hover:underline text-xs font-semibold ml-3">
+                                Performance
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400 bg-white rounded-xl shadow mb-10">
+        <i class="fa-solid fa-link-slash text-4xl mb-3"></i>
+        <p>No links generated yet - pick a product below to get started.</p>
+    </div>
+    {% endif %}
+
+    <h2 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">Generate a New Link</h2>
+
+    {% if promotable_products %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for product in promotable_products %}
+        <div class="bg-white rounded-xl shadow p-4 flex items-center gap-3">
+            <div class="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="w-full h-full object-cover">
+                {% else %}
+                    <i class="fa-solid fa-image text-gray-300 w-full h-full flex items-center justify-center"></i>
+                {% endif %}
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold text-gray-800 text-sm truncate">{{ product.name }}</p>
+                <p class="text-xs text-gray-500">₦{{ product.price }}</p>
+                <p class="text-xs text-green-600 font-semibold">
+                    {{ product.affiliate_commission_rate }}% &middot; ~₦{{ product.estimated_commission }} commission
+                </p>
+            </div>
+            <form method="post" action="{% url 'affiliates:generate_link' product.id %}">
+                {% csrf_token %}
+                <button type="submit"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition whitespace-nowrap">
+                    Generate Link
+                </button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400 bg-white rounded-xl shadow">
+        <p>You already have links for every available product.</p>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function copyLink(button, url) {
+        navigator.clipboard.writeText(url).then(function () {
+            const original = button.textContent;
+            button.textContent = 'Copied!';
+            setTimeout(function () { button.textContent = original; }, 1500);
+        });
+    }
+</script>
+{% endblock %}

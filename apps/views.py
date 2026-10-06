@@ -1,0 +1,589 @@
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import HttpResponse
+from django.contrib import messages
+from django.core.mail import send_mail
+from django.conf import settings
+from .forms import AdminSignupForm, PasswordVerificationForm, ProductForm
+from .models import ContactMessage
+from django.contrib.auth import login, authenticate, logout, get_user_model
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.template.loader import render_to_string
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.urls import reverse
+from django.db import models
+from django.db.models import Sum
+from .models import Order
+from apps.catalog.models import Product, Review
+
+# NEW-architecture models, used only by admin_dashboard below. `Order`
+# above (from .models, the legacy monolith) is still the real model
+# behind admin_orders/orders.html elsewhere in this file - not touched
+# here, since that's a separate page with its own legacy-only fields
+# (amount, verified, purchase_completed). Aliased to avoid shadowing it.
+from apps.orders.models import Order as RealOrder, OrderStatus, Refund
+from apps.sellers.models import EarningStatus, SellerEarning, SellerPayout, SellerProfile, SellerStatus
+from apps.affiliates.models import AffiliateCommission, AffiliatePayout, AffiliateProfile, AffiliateStatus, CommissionStatus
+from apps.riders.models import RiderEarning, RiderEarningStatus
+from apps.core.enums import PayoutStatus, RefundStatus
+from apps.notifications.models import Notification
+from .forms import MessageForm
+
+User = get_user_model()
+
+import uuid
+import requests
+import json
+import hmac
+import hashlib
+from django.views.decorators.csrf import csrf_exempt
+
+user = settings.AUTH_USER_MODEL
+
+class OrderAdminHelper:
+    """Helper class for custom admin order functions"""
+
+    @staticmethod
+    def amount_display(obj):
+        return f"₦{obj.amount:,}"
+    amount_display.short_description = "Amount"
+
+    @staticmethod
+    def purchase_status(obj):
+        if getattr(obj, 'verified', False) and not getattr(obj, 'purchase_completed', False):
+            return "⚠ Recovery Needed"
+        return "✅ Completed"
+    purchase_status.short_description = "Purchase Status"
+
+    @staticmethod
+    def mark_as_verified(queryset):
+        queryset.update(verified=True, status='paid')
+
+    @staticmethod
+    def recover_failed_purchase(queryset):
+        recovered = 0
+        for order in queryset:
+            if order.verified and not getattr(order, 'purchase_completed', False):
+                order.purchase_completed = True
+                order.status = 'completed'
+                order.save()
+                recovered += 1
+        return recovered
+
+
+
+# 404 NOT FOUND
+# ====================== AUTHENTICATION ======================
+# ====================== ADMIN DASHBOARD ======================
+
+
+
+# Check if user is staff or superuser
+def is_admin(user):
+    return user.is_staff or user.is_superuser
+
+
+
+def signup_view(request):
+    if request.method == 'POST':
+        form = AdminSignupForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.is_active = False
+            user.is_staff = True
+            user.save()
+
+            send_verification_email(request, user)
+            messages.success(request, "Account created! Please check your email to verify.")
+            return redirect('custom_login')
+    else:
+        form = AdminSignupForm()
+
+    return render(request, 'custom_admin/custom_signup.html', {'form': form})
+
+
+
+def send_verification_email(request, user):
+    token = default_token_generator.make_token(user)
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    
+    verification_link = request.build_absolute_uri(
+        reverse('verify_email', kwargs={'uidb64': uid, 'token': token})
+    )
+
+    subject = "Verify Your Admin Account"
+    message = render_to_string('custom_admin/email_verification.html', {
+        'user': user,
+        'verification_link': verification_link,
+    })
+
+    send_mail(subject, message, None, [user.email], fail_silently=False)
+
+
+
+
+def verify_email(request, uidb64, token):
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    if user is not None and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.save()
+        messages.success(request, "Email verified successfully! You can now login.")
+        return redirect('custom_login')
+    else:
+        messages.error(request, "Verification link is invalid or has expired.")
+        return redirect('custom_signup')
+
+
+
+
+# =========================
+# LOGIN VIEW
+# =========================
+def login_view(request):
+
+    if request.user.is_authenticated and is_admin(request.user):
+        return redirect('admin_dashboard')
+
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+
+        user = authenticate(
+            request,
+            username=username,
+            password=password
+        )
+
+        if user is not None:
+
+            if user.is_staff or user.is_superuser:
+                login(request, user)
+                return redirect('admin_dashboard')
+
+            else:
+                messages.error(
+                    request,
+                    'You do not have permission to access this dashboard.'
+                )
+
+        else:
+            messages.error(
+                request,
+                'Invalid username or password.'
+            )
+
+    return render(
+        request,
+        'custom_admin/custom_login.html'
+    )
+
+# =========================
+# ADMIN DASHBOARD
+# =========================
+
+@login_required
+@user_passes_test(is_admin)
+def custom_admin_view(request):
+
+    return redirect('admin_dashboard')
+
+
+@login_required
+@user_passes_test(is_admin)
+def admin_dashboard(request):
+
+    total_users = User.objects.count()
+    total_products = Product.objects.count()
+    total_messages = ContactMessage.objects.count()
+
+    # Real orders/revenue - RealOrder is apps.orders.models.Order, the
+    # actual order system built out through this project (multi-item,
+    # multi-seller, real checkout/payment flow). The legacy `Order`
+    # model imported above (from .models) predates that and is only
+    # still used by the separate admin_orders page below - not
+    # touched here, to avoid breaking that page.
+    total_orders = RealOrder.objects.count()
+
+    revenue = RealOrder.objects.filter(
+        status__in=[OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED]
+    ).aggregate(total=Sum('total'))['total'] or 0
+
+    failed_purchases = RealOrder.objects.filter(status=OrderStatus.FAILED).count()
+
+    recent_orders = RealOrder.objects.order_by('-created_at')[:10]
+    recent_products = Product.objects.order_by('-created_at')[:10]
+    recent_messages = ContactMessage.objects.order_by('-created_at')[:10]
+
+    # Marketplace/affiliate subsystems - none of this existed the last
+    # time this dashboard was touched. Surfacing "needs attention" counts
+    # (pending applications, pending payouts) here since those are the
+    # things an admin actually needs to notice and act on; deeper
+    # management of each stays in Django admin (/admin/), which already
+    # has full search/filter/actions for all of these.
+    total_sellers = SellerProfile.objects.count()
+    pending_seller_applications = SellerProfile.objects.filter(status=SellerStatus.PENDING).count()
+    # pending_seller_payouts / pending_affiliate_payouts removed - the old
+    # Payout/AffiliatePayout models they read from no longer exist (replaced
+    # by the SellerEarning/AffiliateCommission ledger). Phase 9 (actual
+    # payout requests) hasn't been rebuilt against the ledger yet - see
+    # apps.sellers.views and apps.affiliates.views.
+
+    total_affiliates = AffiliateProfile.objects.count()
+    pending_affiliate_applications = AffiliateProfile.objects.filter(status=AffiliateStatus.PENDING).count()
+
+    total_reviews = Review.objects.count()
+
+    # Notifications app - didn't exist the last time this dashboard was
+    # touched. Just a raw count, not a "needs attention" item like the
+    # pending applications/payouts above - there's nothing for an admin
+    # to action here, it's purely informational (confirms the
+    # notification pipeline is actually firing).
+    total_notifications_sent = Notification.objects.count()
+
+    # Spec section 28 - restored (the comment above claiming these
+    # models "no longer exist" is stale; SellerPayout/AffiliatePayout
+    # were rebuilt against the ledger in Phase 9 and are very much real).
+    pending_seller_payouts = SellerPayout.objects.filter(status=PayoutStatus.PENDING).count()
+    pending_affiliate_payouts = AffiliatePayout.objects.filter(status=PayoutStatus.PENDING).count()
+
+    # Spec section 28's remaining summary cards. "Liabilities" = money
+    # the platform owes but hasn't paid out yet (Held + Available,
+    # mirroring each dashboard's own "Held"/"Available" breakdown) -
+    # Pending is deliberately excluded, since that stage hasn't even
+    # cleared the buyer-protection/hold window yet.
+    _owed_statuses = (EarningStatus.CONFIRMED, EarningStatus.AVAILABLE)
+    seller_liabilities = SellerEarning.objects.filter(
+        reversal_of__isnull=True, status__in=_owed_statuses,
+    ).aggregate(total=Sum("earning_amount"))["total"] or 0
+
+    _owed_commission_statuses = (CommissionStatus.CONFIRMED, CommissionStatus.AVAILABLE)
+    affiliate_liabilities = AffiliateCommission.objects.filter(
+        reversal_of__isnull=True, status__in=_owed_commission_statuses,
+    ).aggregate(total=Sum("commission_amount"))["total"] or 0
+
+    _owed_rider_statuses = (RiderEarningStatus.CONFIRMED, RiderEarningStatus.AVAILABLE)
+    rider_payments = RiderEarning.objects.filter(
+        reversal_of__isnull=True, status__in=_owed_rider_statuses,
+    ).aggregate(total=Sum("amount"))["total"] or 0
+
+    gross_marketplace_volume = revenue  # every paid order's total - already computed above
+
+    # Platform's own cut, net of anything already refunded back out.
+    platform_revenue = SellerEarning.objects.filter(reversal_of__isnull=True).aggregate(
+        total=Sum("platform_commission_amount")
+    )["total"] or 0
+
+    pending_refunds = Refund.objects.filter(status=RefundStatus.REQUESTED).count()
+
+    # "Active disputes" - a refund that's actually being worked, past the
+    # initial request but not yet at a terminal state.
+    _active_dispute_statuses = (
+        RefundStatus.UNDER_REVIEW, RefundStatus.RETURN_IN_PROGRESS, RefundStatus.ITEM_RECEIVED,
+        RefundStatus.SELLER_CONDITION_CONFIRMED, RefundStatus.PLATFORM_APPROVED, RefundStatus.PROCESSING,
+    )
+    active_disputes = Refund.objects.filter(status__in=_active_dispute_statuses).count()
+
+    context = {
+        'title': 'Admin Dashboard',
+        'total_users': total_users,
+        'total_products': total_products,
+        'total_orders': total_orders,
+        'failed_purchases': failed_purchases,
+        'total_messages': total_messages,
+        'revenue': revenue,
+        'recent_orders': recent_orders,
+        'recent_products': recent_products,
+        'recent_messages': recent_messages,
+        'total_sellers': total_sellers,
+        'pending_seller_applications': pending_seller_applications,
+        'pending_seller_payouts': pending_seller_payouts,
+        'total_affiliates': total_affiliates,
+        'pending_affiliate_applications': pending_affiliate_applications,
+        'pending_affiliate_payouts': pending_affiliate_payouts,
+        'total_reviews': total_reviews,
+        'total_notifications_sent': total_notifications_sent,
+        # Spec section 28 summary cards
+        'gross_marketplace_volume': gross_marketplace_volume,
+        'platform_revenue': platform_revenue,
+        'seller_liabilities': seller_liabilities,
+        'affiliate_liabilities': affiliate_liabilities,
+        'rider_payments': rider_payments,
+        'pending_refunds': pending_refunds,
+        'active_disputes': active_disputes,
+    }
+
+    return render(
+        request,
+        'custom_admin/dashboard.html',
+        context
+    )
+
+
+@login_required
+@user_passes_test(is_admin)
+def admin_analytics(request):
+    """Spec section 29 - marketplace-wide charts, 30-day window, same {"labels": [...], "values": [...]} shape used elsewhere (apps.sellers.analytics, apps.affiliates.services.affiliate_analytics)."""
+    from datetime import timedelta
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
+    from django.utils import timezone
+
+    since = timezone.now() - timedelta(days=30)
+
+    def _daily(queryset, value_field=None):
+        rows = (
+            queryset.filter(created_at__gte=since)
+            .annotate(bucket=TruncDate("created_at"))
+            .values("bucket")
+            .annotate(total=Sum(value_field) if value_field else Count("id"))
+            .order_by("bucket")
+        )
+        return {
+            "labels": [row["bucket"].strftime("%b %-d") for row in rows],
+            "values": [float(row["total"] or 0) for row in rows],
+        }
+
+    revenue_by_day = _daily(
+        RealOrder.objects.filter(status__in=[OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED]),
+        value_field="total",
+    )
+    orders_by_day = _daily(RealOrder.objects.all())
+
+    refunds_by_day = _daily(Refund.objects.all())
+
+    revenue_distribution = {
+        "labels": ["Seller Earnings", "Affiliate Commissions", "Rider Payments", "Platform Revenue"],
+        "values": [
+            float(SellerEarning.objects.filter(reversal_of__isnull=True).aggregate(t=Sum("earning_amount"))["t"] or 0),
+            float(AffiliateCommission.objects.filter(reversal_of__isnull=True).aggregate(t=Sum("commission_amount"))["t"] or 0),
+            float(RiderEarning.objects.filter(reversal_of__isnull=True).aggregate(t=Sum("amount"))["t"] or 0),
+            float(SellerEarning.objects.filter(reversal_of__isnull=True).aggregate(t=Sum("platform_commission_amount"))["t"] or 0),
+        ],
+    }
+
+    top_sellers_qs = (
+        SellerEarning.objects.filter(reversal_of__isnull=True)
+        .values("seller__store_name")
+        .annotate(total=Sum("earning_amount"), sales=Count("id"))
+        .order_by("-total")[:10]
+    )
+    top_sellers = {
+        "labels": [row["seller__store_name"] for row in top_sellers_qs],
+        "values": [float(row["total"] or 0) for row in top_sellers_qs],
+    }
+
+    top_affiliates_qs = (
+        AffiliateProfile.objects.annotate(
+            click_count=Count("clicks", distinct=True),
+            conversion_count=Count("commissions", filter=models.Q(commissions__reversal_of__isnull=True), distinct=True),
+        )
+        .order_by("-conversion_count")[:10]
+    )
+    top_affiliates = [
+        {
+            "name": affiliate.affiliate_code,
+            "clicks": affiliate.click_count,
+            "conversions": affiliate.conversion_count,
+            "earnings": affiliate.total_earnings,
+        }
+        for affiliate in top_affiliates_qs
+    ]
+
+    return render(request, "custom_admin/analytics.html", {
+        "revenue_by_day": revenue_by_day,
+        "orders_by_day": orders_by_day,
+        "refunds_by_day": refunds_by_day,
+        "revenue_distribution": revenue_distribution,
+        "top_sellers": top_sellers,
+        "top_affiliates": top_affiliates,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def admin_orders(request):
+    orders = Order.objects.all().order_by('-created_at')
+
+    # Add custom methods as context
+    for order in orders:
+        order.amount_display = f"₦{order.amount:,}"
+        if order.verified and not getattr(order, 'purchase_completed', False):
+            order.purchase_status = "⚠ Recovery Needed"
+        else:
+            order.purchase_status = "✅ Completed"
+
+    context = {
+        'orders': orders,
+        'title': 'Manage Orders',
+        'OrderAdminHelper': OrderAdminHelper,
+    }
+
+    return render(request, 'custom_admin/orders.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+def admin_products(request):
+    products = Product.objects.all()
+
+    return render(
+        request,
+        'custom_admin/products.html',
+        {'products': products}
+    )
+
+@login_required
+@user_passes_test(is_admin)
+def delete_product(request, pk):
+
+    product = get_object_or_404(Product, pk=pk)
+
+    if request.method == "POST":
+        product.delete()
+
+        messages.success(
+            request,
+            "Product deleted successfully."
+        )
+
+        return redirect('admin_products')
+
+    return render(
+        request,
+        'custom_admin/delete_product.html',
+        {
+            'product': product
+        }
+    )
+
+
+
+@login_required
+@user_passes_test(is_admin)
+def add_product(request):
+
+    if request.method == 'POST':
+        form = ProductForm(
+            request.POST,
+            request.FILES
+        )
+
+        if form.is_valid():
+            form.save()
+
+            messages.success(
+                request,
+                "Product added successfully."
+            )
+
+            return redirect('admin_products')
+
+    else:
+        form = ProductForm()
+
+    return render(
+        request,
+        'custom_admin/add_product.html',
+        {
+            'form': form
+        }
+    )
+
+
+@login_required
+@user_passes_test(is_admin)
+def edit_product(request, pk):
+
+    product = get_object_or_404(Product, pk=pk)
+
+    if request.method == 'POST':
+        form = ProductForm(
+            request.POST,
+            request.FILES,
+            instance=product,
+        )
+
+        if form.is_valid():
+            form.save()
+
+            messages.success(
+                request,
+                "Product updated successfully."
+            )
+
+            return redirect('admin_products')
+
+    else:
+        form = ProductForm(instance=product)
+
+    return render(
+        request,
+        'custom_admin/edit_product.html',
+        {
+            'form': form,
+            'product': product,
+        }
+    )
+
+
+
+
+
+
+@login_required
+@user_passes_test(is_admin)
+def admin_users(request):
+    users = User.objects.all()
+
+    return render(
+        request,
+        'custom_admin/users.html',
+        {'users': users}
+    )
+
+
+@login_required
+@user_passes_test(is_admin)
+def admin_messages(request):
+    messages_list = ContactMessage.objects.all().order_by('-created_at')
+
+    return render(
+        request,
+        'custom_admin/messages.html',
+        {'messages_list': messages_list}
+    )
+
+
+
+
+    
+
+
+# =========================
+# LOGOUT VIEW
+# =========================
+def logout_view(request):
+    logout(request)
+    return render(request, 'custom_admin/custom_logout.html')
+
+def admin_panel(request):
+    if not request.user.is_authenticated:
+        return redirect('custom_login')
+
+    return render(request, 'custom_admin/dashboard.html',)
+
+
+
+
+# ====================== SHOP & PAYMENT ======================
+# Retired: the old single-product buy_now/checkout/verify_payment/
+# download_product/paystack_webhook flow. Superseded by the cart-based
+# checkout in apps.orders/apps.payments/apps.delivery - see
+# docs/28_DECISIONS.md. Product browsing now lives in apps.catalog
+# (product_list/product_detail), not here.

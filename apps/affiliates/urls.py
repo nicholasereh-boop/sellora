@@ -1,0 +1,29 @@
+from django.urls import path
+
+from . import views
+
+app_name = "affiliates"
+
+urlpatterns = [
+    path("apply/", views.apply_view, name="apply"),
+    path("status/", views.application_status_view, name="application_status"),
+    path("dashboard/", views.dashboard_view, name="dashboard"),
+    path("bank-details/", views.bank_details_view, name="bank_details"),
+
+    # Phase 6 - referral tracking
+    path("links/", views.my_links_view, name="my_links"),
+    path("links/<uuid:product_id>/generate/", views.generate_link_view, name="generate_link"),
+    path("links/<uuid:link_id>/performance/", views.link_detail_view, name="link_detail"),
+
+    # Analytics
+    path("analytics/", views.analytics_view, name="analytics"),
+    path("analytics/data/", views.analytics_data_view, name="analytics_data"),
+
+    # Phase 7 - commission calculations
+    path("conversions/", views.my_conversions_view, name="my_conversions"),
+
+    # Phase 9 - payout requests. Real balances, no persisted history yet -
+    # see apps.affiliates.views.payouts_view.
+    path("payouts/", views.payouts_view, name="payouts"),
+    path("payouts/request/", views.payout_request_view, name="payout_request"),
+]

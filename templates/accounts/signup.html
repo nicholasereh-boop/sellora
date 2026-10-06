@@ -1,0 +1,254 @@
+{% load static %}
+{% load socialaccount %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account • MyApp</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-950 flex items-center justify-center p-6">
+
+    <!-- Background Effects -->
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute -top-32 -left-20 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl"></div>
+        <div class="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-purple-500/20 blur-3xl"></div>
+    </div>
+
+    <div class="relative w-full max-w-lg">
+
+        <!-- Card -->
+        <div class="rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl p-8">
+
+            <!-- Header -->
+            <div class="text-center mb-8">
+
+                <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         class="h-8 w-8 text-white"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke="currentColor">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M18 9v2a3 3 0 01-3 3H9m6 0v2m0-2H9m6-8H9a3 3 0 00-3 3v8a3 3 0 003 3h6a3 3 0 003-3V9a3 3 0 00-3-3z"/>
+
+                    </svg>
+                </div>
+
+                <h1 class="mt-5 text-3xl font-bold text-white">
+                    Create Account
+                </h1>
+
+                <p class="mt-2 text-sm text-gray-300">
+                    Join the platform and start managing your account
+                </p>
+
+            </div>
+
+            <!-- Form Errors -->
+            {% if form.errors %}
+            <div class="mb-6 rounded-xl border border-red-500/30 bg-red-500/20 p-4">
+
+                <h3 class="text-red-200 font-semibold mb-2">
+                    Please correct the following errors:
+                </h3>
+
+                <ul class="space-y-1 text-sm text-red-100">
+                    {% for field in form %}
+                        {% for error in field.errors %}
+                            <li>• {{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+
+                    {% for error in form.non_field_errors %}
+                        <li>• {{ error }}</li>
+                    {% endfor %}
+                </ul>
+
+            </div>
+            {% endif %}
+
+            <form method="POST" class="space-y-5">
+
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next }}">
+
+                <!-- First name / Surname -->
+                <div class="grid grid-cols-2 gap-4">
+
+                    <div>
+                        <label for="{{ form.first_name.id_for_label }}" class="mb-2 block text-sm font-medium text-gray-200">
+                            First Name
+                        </label>
+
+                        <div class="rounded-xl border border-white/20 bg-white/10 overflow-hidden">
+                            {{ form.first_name }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="{{ form.last_name.id_for_label }}" class="mb-2 block text-sm font-medium text-gray-200">
+                            Surname
+                        </label>
+
+                        <div class="rounded-xl border border-white/20 bg-white/10 overflow-hidden">
+                            {{ form.last_name }}
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Username -->
+                <div>
+                    <label for="{{ form.username.id_for_label }}" class="mb-2 block text-sm font-medium text-gray-200">
+                        Username
+                    </label>
+
+                    <div class="rounded-xl border border-white/20 bg-white/10 overflow-hidden">
+                        {{ form.username }}
+                    </div>
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label for="{{ form.email.id_for_label }}" class="mb-2 block text-sm font-medium text-gray-200">
+                        Email Address
+                    </label>
+
+                    <div class="rounded-xl border border-white/20 bg-white/10 overflow-hidden">
+                        {{ form.email }}
+                    </div>
+                </div>
+
+                <!-- Phone -->
+                <div>
+                    <label for="{{ form.phone.id_for_label }}" class="mb-2 block text-sm font-medium text-gray-200">
+                        Phone Number
+                    </label>
+
+                    <div class="rounded-xl border border-white/20 bg-white/10 overflow-hidden">
+                        {{ form.phone }}
+                    </div>
+                </div>
+
+                <!-- Password -->
+                <div>
+                    <label for="{{ form.password1.id_for_label }}" class="mb-2 block text-sm font-medium text-gray-200">
+                        Password
+                    </label>
+
+                    <div class="rounded-xl border border-white/20 bg-white/10 overflow-hidden">
+                        {{ form.password1 }}
+                    </div>
+
+                    <p class="mt-2 text-xs text-gray-400">
+                        Use at least 8 characters with letters and numbers.
+                    </p>
+                </div>
+
+                <!-- Confirm Password -->
+                <div>
+                    <label for="{{ form.password2.id_for_label }}" class="mb-2 block text-sm font-medium text-gray-200">
+                        Confirm Password
+                    </label>
+
+                    <div class="rounded-xl border border-white/20 bg-white/10 overflow-hidden">
+                        {{ form.password2 }}
+                    </div>
+
+                </div>
+
+                <!-- Terms -->
+                <div class="flex items-start gap-3 text-sm text-gray-300">
+
+                    <input
+                        type="checkbox"
+                        required
+                        class="mt-1 h-4 w-4 rounded border-gray-500 bg-transparent">
+
+                    <span>
+                        I agree to the
+                        <a href="#" class="text-blue-300 hover:text-blue-200">
+                            Terms of Service
+                        </a>
+                        and
+                        <a href="#" class="text-blue-300 hover:text-blue-200">
+                            Privacy Policy
+                        </a>
+                    </span>
+
+                </div>
+
+                <!-- Submit -->
+                <button
+                    type="submit"
+                    class="w-full rounded-xl bg-indigo-600 py-3 font-semibold text-white transition hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/40">
+
+                    Create Account
+
+                </button>
+
+            </form>
+
+            <!-- Divider -->
+            <div class="my-8 flex items-center">
+
+                <div class="h-px flex-1 bg-white/20"></div>
+
+                <span class="px-4 text-sm text-gray-400">
+                    OR
+                </span>
+
+                <div class="h-px flex-1 bg-white/20"></div>
+
+            </div>
+
+            <!-- Google Signup - a returning user with a Google account
+                 that matches an existing email gets logged into their
+                 existing account instead of hitting an error (handled
+                 by SocialAccountAdapter on the backend). -->
+            <a href="{% provider_login_url 'google' next=next %}"
+               class="flex items-center justify-center gap-3 w-full rounded-xl border border-white/20 bg-white py-3 font-semibold text-gray-700 transition hover:bg-gray-100">
+
+                <svg class="h-5 w-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.63h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.57-5.17 3.57-8.8z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.94-2.9l-3.88-3c-1.08.72-2.45 1.15-4.06 1.15-3.12 0-5.77-2.11-6.71-4.94H1.28v3.1C3.26 21.3 7.3 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.29 14.31A7.2 7.2 0 0 1 4.9 12c0-.8.14-1.58.39-2.31v-3.1H1.28A11.98 11.98 0 0 0 0 12c0 1.94.46 3.77 1.28 5.41l4.01-3.1z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.94 1.19 15.24 0 12 0 7.3 0 3.26 2.7 1.28 6.59l4.01 3.1C6.23 6.86 8.88 4.75 12 4.75z"/>
+                </svg>
+
+                Continue with Google
+
+            </a>
+
+            <!-- Login Link -->
+            <div class="text-center text-sm text-gray-300 mt-8">
+
+                Already have an account?
+
+                <a href="{% url 'accounts:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}"
+                   class="font-semibold text-blue-300 hover:text-blue-200">
+
+                    Sign In
+
+                </a>
+
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <p class="mt-6 text-center text-xs text-gray-400">
+            © {% now "Y" %} MyApp. All rights reserved.
+        </p>
+
+    </div>
+
+</body>
+</html>

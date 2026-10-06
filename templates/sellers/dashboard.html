@@ -1,0 +1,387 @@
+{% extends 'core/base.html' %}
+{% load core_extras %}
+{% block title %}Seller Dashboard | Top Tech{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-12">
+    <div class="flex items-center justify-between mb-8 flex-wrap gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-800">{{ profile.store_name }}</h1>
+            <p class="text-gray-500">Seller Dashboard</p>
+        </div>
+        <div class="flex gap-4 flex-wrap">
+            <a href="{% url 'sellers:product_list' %}" class="text-indigo-600 font-semibold text-sm hover:underline">
+                My Products
+            </a>
+            <a href="{% url 'sellers:order_item_list' %}" class="text-indigo-600 font-semibold text-sm hover:underline">
+                My Orders
+            </a>
+            <a href="{% url 'sellers:earnings' %}" class="text-indigo-600 font-semibold text-sm hover:underline">
+                Earnings
+            </a>
+            <a href="{% url 'sellers:payouts' %}" class="text-indigo-600 font-semibold text-sm hover:underline">
+                Payouts
+            </a>
+            <a href="{% url 'sellers:bank_details' %}" class="text-indigo-600 font-semibold text-sm hover:underline">
+                Bank Details
+            </a>
+            <a href="{% url 'sellers:store_settings' %}" class="text-indigo-600 font-semibold text-sm hover:underline">
+                Store Settings
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <p class="p-3 rounded-lg bg-green-50 text-green-700 text-sm mb-4">{{ message }}</p>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Summary cards - spec section 5 -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Total Sales</p>
+            <p class="text-2xl font-bold text-gray-800">₦{{ total_sales }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Pending Earnings</p>
+            <p class="text-2xl font-bold text-amber-600">₦{{ pending_payout }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Available Balance</p>
+            <p class="text-2xl font-bold text-green-600">₦{{ available_balance }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Total Withdrawn</p>
+            <p class="text-2xl font-bold text-gray-800">₦{{ paid_out }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Active Orders</p>
+            <p class="text-2xl font-bold text-gray-800">{{ active_orders_count }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Refund Requests</p>
+            <p class="text-2xl font-bold {% if refund_requests_count %}text-red-600{% else %}text-gray-800{% endif %}">{{ refund_requests_count }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Products</p>
+            <p class="text-2xl font-bold text-gray-800">{{ total_products }}</p>
+        </div>
+        <div class="bg-white rounded-xl shadow p-5">
+            <p class="text-sm text-gray-500">Status</p>
+            <p class="text-2xl font-bold text-green-600">{{ profile.get_status_display }}</p>
+        </div>
+    </div>
+
+    <div class="flex items-center justify-between bg-white rounded-xl shadow p-5 mb-10">
+        <div>
+            <p class="text-sm text-gray-500">Withdrawable Now</p>
+            <p class="text-2xl font-bold text-green-600">₦{{ profile.withdrawable_balance }}</p>
+            {% if profile.payouts_in_progress_total %}
+                <p class="text-xs text-gray-400">₦{{ profile.payouts_in_progress_total }} already requested and awaiting payout</p>
+            {% endif %}
+        </div>
+        <a href="{% url 'sellers:payouts' %}" class="bg-indigo-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-indigo-700">
+            Request Payout
+        </a>
+    </div>
+
+    <!-- Charts - spec section 5. All data computed server-side in
+         apps.sellers.analytics from real SellerEarning/OrderItem rows. -->
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-800">Revenue Trend</h2>
+                <div class="flex gap-1 bg-gray-100 rounded-lg p-1 text-xs font-semibold" role="group" aria-label="Revenue trend date range">
+                    <button type="button" class="revenue-period-btn px-3 py-1 rounded-md {% if revenue_period == 'daily' %}bg-white shadow text-gray-800{% else %}text-gray-500{% endif %}" data-period="daily" aria-pressed="{% if revenue_period == 'daily' %}true{% else %}false{% endif %}">Daily</button>
+                    <button type="button" class="revenue-period-btn px-3 py-1 rounded-md {% if revenue_period == 'weekly' %}bg-white shadow text-gray-800{% else %}text-gray-500{% endif %}" data-period="weekly" aria-pressed="{% if revenue_period == 'weekly' %}true{% else %}false{% endif %}">Weekly</button>
+                    <button type="button" class="revenue-period-btn px-3 py-1 rounded-md {% if revenue_period == 'monthly' %}bg-white shadow text-gray-800{% else %}text-gray-500{% endif %}" data-period="monthly" aria-pressed="{% if revenue_period == 'monthly' %}true{% else %}false{% endif %}">Monthly</button>
+                </div>
+            </div>
+            <div class="relative" style="min-height:220px;">
+                <div id="revenueTrendLoading" class="hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading&hellip;
+                </div>
+                <p id="revenueTrendError" class="hidden text-sm text-red-500 py-16 text-center">
+                    Couldn't load this chart. <button type="button" id="revenueTrendRetry" class="underline">Retry</button>
+                </p>
+                <p id="revenueTrendEmpty" class="{% if revenue_trend.labels %}hidden{% endif %} text-sm text-gray-400 py-16 text-center">
+                    No sales in this period yet.
+                </p>
+                <canvas id="revenueTrendChart" height="220" role="img"
+                        aria-label="Revenue trend, {{ revenue_period }}, from ₦{{ total_sales }} in total sales"
+                        class="{% if not revenue_trend.labels %}hidden{% endif %}"></canvas>
+                {% chart_data_table "revenueTrendChart" "Revenue Trend" revenue_trend.labels revenue_trend.values "Revenue (₦)" %}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Orders Over Time</h2>
+            {% if orders_over_time.labels %}
+                <canvas id="ordersOverTimeChart" height="220" role="img" aria-label="Orders over time, last 30 days"></canvas>
+                {% chart_data_table "ordersOverTimeChart" "Orders Over Time" orders_over_time.labels orders_over_time.values "Orders" %}
+            {% else %}
+                <p class="text-sm text-gray-400 py-16 text-center">No orders in the last 30 days.</p>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Orders by Status</h2>
+            {% if total_orders %}
+                <canvas id="ordersByStatusChart" height="220" role="img" aria-label="Orders by fulfillment status"></canvas>
+                {% chart_data_table "ordersByStatusChart" "Orders by Status" orders_by_status.labels orders_by_status.values "Line items" %}
+            {% else %}
+                <p class="text-sm text-gray-400 py-16 text-center">No orders yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Earnings Breakdown</h2>
+            {% if total_earnings %}
+                <canvas id="earningsBreakdownChart" height="220" role="img" aria-label="Earnings breakdown by status"></canvas>
+                {% chart_data_table "earningsBreakdownChart" "Earnings Breakdown" earnings_breakdown.labels earnings_breakdown.values "Amount (₦)" %}
+            {% else %}
+                <p class="text-sm text-gray-400 py-16 text-center">No earnings recorded yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6 lg:col-span-2">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Product Performance</h2>
+            {% if product_performance.top %}
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase mb-3">Top Products</p>
+                        <canvas id="topProductsChart" height="200" role="img" aria-label="Top performing products by revenue"></canvas>
+                        <button type="button" class="text-xs text-indigo-600 hover:underline font-semibold mt-2"
+                                aria-expanded="false" aria-controls="topProductsChart-table"
+                                onclick="var t=document.getElementById('topProductsChart-table'); var hidden=t.classList.toggle('hidden'); this.setAttribute('aria-expanded', hidden ? 'false' : 'true'); this.textContent = hidden ? 'View as table' : 'Hide table';">
+                            View as table
+                        </button>
+                        <div id="topProductsChart-table" class="hidden mt-2 overflow-x-auto">
+                            <table class="w-full text-xs border border-gray-100 rounded-lg">
+                                <caption class="sr-only">Top performing products by revenue</caption>
+                                <thead><tr class="bg-gray-50 text-gray-500 text-left"><th scope="col" class="px-3 py-2">Product</th><th scope="col" class="px-3 py-2">Revenue (₦)</th></tr></thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    {% for p in product_performance.top %}
+                                    <tr><td class="px-3 py-2">{{ p.name }}</td><td class="px-3 py-2 font-medium">{{ p.revenue }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% if product_performance.bottom %}
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 uppercase mb-3">Lowest Performing</p>
+                        <canvas id="bottomProductsChart" height="200" role="img" aria-label="Lowest performing products by revenue"></canvas>
+                        <button type="button" class="text-xs text-indigo-600 hover:underline font-semibold mt-2"
+                                aria-expanded="false" aria-controls="bottomProductsChart-table"
+                                onclick="var t=document.getElementById('bottomProductsChart-table'); var hidden=t.classList.toggle('hidden'); this.setAttribute('aria-expanded', hidden ? 'false' : 'true'); this.textContent = hidden ? 'View as table' : 'Hide table';">
+                            View as table
+                        </button>
+                        <div id="bottomProductsChart-table" class="hidden mt-2 overflow-x-auto">
+                            <table class="w-full text-xs border border-gray-100 rounded-lg">
+                                <caption class="sr-only">Lowest performing products by revenue</caption>
+                                <thead><tr class="bg-gray-50 text-gray-500 text-left"><th scope="col" class="px-3 py-2">Product</th><th scope="col" class="px-3 py-2">Revenue (₦)</th></tr></thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    {% for p in product_performance.bottom %}
+                                    <tr><td class="px-3 py-2">{{ p.name }}</td><td class="px-3 py-2 font-medium">{{ p.revenue }}</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            {% else %}
+                <p class="text-sm text-gray-400 py-16 text-center">No product sales yet.</p>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <p class="text-sm text-gray-400">Pending earnings clear to "Available" once confirmed by the platform.</p>
+</div>
+
+{{ revenue_trend|json_script:"revenue-trend-data" }}
+{{ orders_over_time|json_script:"orders-over-time-data" }}
+{{ orders_by_status|json_script:"orders-by-status-data" }}
+{{ earnings_breakdown|json_script:"earnings-breakdown-data" }}
+{{ product_performance|json_script:"product-performance-data" }}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+(function () {
+    function readJSON(id) {
+        var el = document.getElementById(id);
+        return el ? JSON.parse(el.textContent) : null;
+    }
+
+    var palette = ["#4f46e5", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#0ea5e9"];
+    var BASE_OPTIONS = { responsive: true, maintainAspectRatio: false };
+
+    function merge(base, extra) {
+        return Object.assign({}, base, extra);
+    }
+
+    // --- Revenue Trend: the one chart with a live AJAX date filter ---
+    var revenueChart = null;
+    var revenueCanvas = document.getElementById("revenueTrendChart");
+    var revenueLoading = document.getElementById("revenueTrendLoading");
+    var revenueError = document.getElementById("revenueTrendError");
+    var revenueEmpty = document.getElementById("revenueTrendEmpty");
+    var revenueUrl = "{% url 'sellers:dashboard_revenue_chart' %}";
+
+    function renderRevenueChart(data) {
+        if (revenueChart) revenueChart.destroy();
+        revenueCanvas.classList.remove("hidden");
+        revenueEmpty.classList.add("hidden");
+        revenueChart = new Chart(revenueCanvas, {
+            type: "line",
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    label: "Revenue (₦)",
+                    data: data.values,
+                    borderColor: "#4f46e5",
+                    backgroundColor: "rgba(79,70,229,0.1)",
+                    fill: true,
+                    tension: 0.3,
+                }],
+            },
+            options: merge(BASE_OPTIONS, {
+                plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                scales: { y: { beginAtZero: true } },
+            }),
+        });
+
+        var tableEl = document.getElementById("revenueTrendChart-table");
+        if (tableEl) {
+            var tbody = tableEl.querySelector("tbody");
+            tbody.innerHTML = data.labels.map(function (label, i) {
+                return "<tr><td class=\"px-3 py-2\">" + label + "</td><td class=\"px-3 py-2 font-medium\">" + data.values[i] + "</td></tr>";
+            }).join("");
+            var summary = document.getElementById("revenueTrendChart-summary");
+            if (summary) summary.textContent = summary.textContent.replace(/: \d+ data point/, ": " + data.labels.length + " data point");
+        }
+    }
+
+    function loadRevenueChart(period) {
+        revenueLoading.classList.remove("hidden");
+        revenueError.classList.add("hidden");
+        revenueCanvas.classList.add("hidden");
+        revenueEmpty.classList.add("hidden");
+
+        fetch(revenueUrl + "?period=" + encodeURIComponent(period), {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            cache: "no-store",
+        })
+            .then(function (resp) {
+                if (!resp.ok) throw new Error("bad response");
+                return resp.json();
+            })
+            .then(function (data) {
+                revenueLoading.classList.add("hidden");
+                if (!data.labels || !data.labels.length) {
+                    revenueEmpty.classList.remove("hidden");
+                    return;
+                }
+                renderRevenueChart(data);
+            })
+            .catch(function () {
+                revenueLoading.classList.add("hidden");
+                revenueError.classList.remove("hidden");
+            });
+    }
+
+    document.querySelectorAll(".revenue-period-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            document.querySelectorAll(".revenue-period-btn").forEach(function (b) {
+                b.classList.remove("bg-white", "shadow", "text-gray-800");
+                b.classList.add("text-gray-500");
+                b.setAttribute("aria-pressed", "false");
+            });
+            btn.classList.add("bg-white", "shadow", "text-gray-800");
+            btn.classList.remove("text-gray-500");
+            btn.setAttribute("aria-pressed", "true");
+            loadRevenueChart(btn.dataset.period);
+        });
+    });
+
+    document.getElementById("revenueTrendRetry").addEventListener("click", function () {
+        var active = document.querySelector(".revenue-period-btn[aria-pressed='true']");
+        loadRevenueChart(active ? active.dataset.period : "daily");
+    });
+
+    // First paint uses the server-rendered data (no extra request on load).
+    var initialRevenue = readJSON("revenue-trend-data");
+    if (initialRevenue && initialRevenue.labels.length) {
+        renderRevenueChart(initialRevenue);
+    }
+
+    // --- The remaining charts: server-rendered once, no date filter yet ---
+
+    var ordersOverTime = readJSON("orders-over-time-data");
+    if (ordersOverTime && ordersOverTime.labels.length) {
+        new Chart(document.getElementById("ordersOverTimeChart"), {
+            type: "bar",
+            data: {
+                labels: ordersOverTime.labels,
+                datasets: [{ label: "Orders", data: ordersOverTime.values, backgroundColor: "#4f46e5" }],
+            },
+            options: merge(BASE_OPTIONS, { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }),
+        });
+    }
+
+    var ordersByStatus = readJSON("orders-by-status-data");
+    var ordersByStatusEl = document.getElementById("ordersByStatusChart");
+    if (ordersByStatus && ordersByStatusEl) {
+        new Chart(ordersByStatusEl, {
+            type: "bar",
+            data: {
+                labels: ordersByStatus.labels,
+                datasets: [{ label: "Line items", data: ordersByStatus.values, backgroundColor: palette }],
+            },
+            options: merge(BASE_OPTIONS, { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }),
+        });
+    }
+
+    var earnings = readJSON("earnings-breakdown-data");
+    var earningsEl = document.getElementById("earningsBreakdownChart");
+    if (earnings && earningsEl) {
+        new Chart(earningsEl, {
+            type: "doughnut",
+            data: {
+                labels: earnings.labels,
+                datasets: [{ data: earnings.values, backgroundColor: ["#f59e0b", "#6366f1", "#10b981", "#9ca3af"] }],
+            },
+            options: BASE_OPTIONS,
+        });
+    }
+
+    var products = readJSON("product-performance-data");
+    var topEl = document.getElementById("topProductsChart");
+    if (products && products.top && products.top.length && topEl) {
+        new Chart(topEl, {
+            type: "bar",
+            data: {
+                labels: products.top.map(function (p) { return p.name; }),
+                datasets: [{ label: "Revenue (₦)", data: products.top.map(function (p) { return p.revenue; }), backgroundColor: "#10b981" }],
+            },
+            options: merge(BASE_OPTIONS, { indexAxis: "y", plugins: { legend: { display: false } } }),
+        });
+    }
+    var bottomEl = document.getElementById("bottomProductsChart");
+    if (products && products.bottom && products.bottom.length && bottomEl) {
+        new Chart(bottomEl, {
+            type: "bar",
+            data: {
+                labels: products.bottom.map(function (p) { return p.name; }),
+                datasets: [{ label: "Revenue (₦)", data: products.bottom.map(function (p) { return p.revenue; }), backgroundColor: "#ef4444" }],
+            },
+            options: merge(BASE_OPTIONS, { indexAxis: "y", plugins: { legend: { display: false } } }),
+        });
+    }
+})();
+</script>
+{% endblock %}

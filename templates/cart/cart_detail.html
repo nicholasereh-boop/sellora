@@ -1,0 +1,212 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Your Cart | Top Tech{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-12">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-8">Your Cart</h1>
+
+    {% if messages %}
+        <div class="mb-6 space-y-2">
+            {% for message in messages %}
+                <p class="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if seller_groups %}
+    {# Marketplace Frontend Roadmap section 18 - "Buyer Multi-Seller Cart": #}
+    {# items grouped into one section per seller, each with its own subtotal #}
+    {# and an ESTIMATED delivery fee (confirmed for real at checkout, once a #}
+    {# delivery method is actually chosen). #}
+    <div class="space-y-6">
+        {% for group in seller_groups %}
+        <div class="bg-white rounded-xl shadow overflow-hidden">
+            <div class="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                <i class="fa-solid fa-store text-gray-400 text-sm"></i>
+                <span class="font-semibold text-gray-700 text-sm">{{ group.seller_name }}</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-xs text-gray-400 uppercase border-b border-gray-100">
+                            <th class="px-5 py-4 font-semibold">Product</th>
+                            <th class="px-5 py-4 font-semibold">Price</th>
+                            <th class="px-5 py-4 font-semibold">Quantity</th>
+                            <th class="px-5 py-4 font-semibold">Subtotal</th>
+                            <th class="px-5 py-4"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 cart-items-body">
+                        {% for item in group.items %}
+                        <tr data-item-id="{{ item.id }}" data-update-url="{% url 'cart:update_cart_item' item.id %}">
+                            <td class="px-5 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                                        {% if item.product.image %}
+                                            <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="w-full h-full object-cover">
+                                        {% else %}
+                                            <i class="fa-solid fa-image text-gray-300"></i>
+                                        {% endif %}
+                                    </div>
+                                    <span class="font-medium text-gray-800">{{ item.product.name }}</span>
+                                </div>
+                            </td>
+                            <td class="px-5 py-4 text-gray-600">₦{{ item.product.price }}</td>
+                            <td class="px-5 py-4">
+                                <input type="number" min="0" value="{{ item.quantity }}"
+                                       class="cart-qty-input w-16 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
+                                       data-original-value="{{ item.quantity }}">
+                            </td>
+                            <td class="px-5 py-4 font-semibold text-gray-800">₦{{ item.subtotal }}</td>
+                            <td class="px-5 py-4 text-right">
+                                <form method="post" action="{% url 'cart:remove_from_cart' item.id %}" class="remove-cart-item-form">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="text-red-500 hover:text-red-700 text-xs font-semibold">
+                                        <i class="fa-solid fa-trash mr-1"></i> Remove
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap justify-end gap-x-8 gap-y-1 text-sm">
+                <span class="text-gray-500">Subtotal: <span class="font-semibold text-gray-800">₦{{ group.subtotal }}</span></span>
+                <span class="text-gray-500">Est. Delivery: <span class="font-semibold text-gray-800">₦{{ group.estimated_delivery_fee }}</span></span>
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="bg-white rounded-xl shadow p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <button type="button" id="update-cart-btn"
+                    class="bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+                <i class="fa-solid fa-rotate mr-1"></i> Update Cart
+            </button>
+            <div class="text-sm text-gray-500 sm:text-right">
+                <div>Products Total: <span class="font-medium text-gray-700">₦{{ cart_estimate.products_total }}</span></div>
+                <div>Est. Delivery: <span class="font-medium text-gray-700">₦{{ cart_estimate.total_delivery_fee }}</span></div>
+                <p class="text-lg font-bold text-gray-800 pt-1">
+                    Est. Total: <span class="text-indigo-600">₦{{ cart_estimate.final_total }}</span>
+                </p>
+                <p class="text-[11px] text-gray-400 mt-1">Final delivery fees are confirmed at checkout, based on your chosen delivery method.</p>
+            </div>
+            <a href="{% url 'orders:checkout' %}"
+               class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-3 rounded-lg transition text-center">
+                Proceed to Checkout
+            </a>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-20 text-gray-400 bg-white rounded-xl shadow">
+        <i class="fa-solid fa-cart-shopping text-5xl mb-4"></i>
+        <p>Your cart is empty.</p>
+        <a href="{% url 'catalog:product_list' %}" class="inline-block mt-4 text-indigo-600 font-semibold hover:underline">
+            Continue shopping
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Single "Update Cart" button applies every changed quantity at once,
+// across every seller's table (each has its own <tbody class="cart-items-body">
+// now that the cart is grouped by seller - Marketplace Frontend Roadmap
+// section 18). Reuses the existing per-item cart:update_cart_item endpoint
+// via fetch, so no backend changes are needed here - the button just
+// orchestrates the same requests that used to be one-per-row.
+(function () {
+    const updateBtn = document.getElementById('update-cart-btn');
+    if (!updateBtn) return;
+
+    function getCookie(name) {
+        const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return match ? match.pop() : '';
+    }
+
+    updateBtn.addEventListener('click', function () {
+        const rows = document.querySelectorAll('.cart-items-body tr[data-item-id]');
+        const requests = [];
+
+        rows.forEach(function (row) {
+            const input = row.querySelector('.cart-qty-input');
+            const newValue = input.value;
+            const originalValue = input.dataset.originalValue;
+            if (newValue === originalValue) return; // skip unchanged rows
+
+            const formData = new FormData();
+            formData.append('quantity', newValue);
+            formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+
+            requests.push(
+                fetch(row.dataset.updateUrl, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData,
+                    cache: 'no-store',
+                })
+            );
+        });
+
+        if (!requests.length) return;
+
+        updateBtn.disabled = true;
+        updateBtn.textContent = 'Updating...';
+
+        Promise.all(requests)
+            .then(function () {
+                window.location.reload();
+            })
+            .catch(function () {
+                updateBtn.disabled = false;
+                updateBtn.innerHTML = '<i class="fa-solid fa-rotate mr-1"></i> Update Cart';
+                alert('Could not update cart. Please try again.');
+            });
+    });
+
+    // Remove button: submit via fetch (cache: 'no-store' so nothing stale
+    // can be served), drop the row from the DOM immediately, then reload
+    // so totals/cart-popup stay in sync with the server.
+    document.addEventListener('submit', function (e) {
+        const form = e.target;
+        if (!form.classList || !form.classList.contains('remove-cart-item-form')) return;
+
+        e.preventDefault();
+
+        const row = form.closest('tr[data-item-id]');
+        const productName = row ? row.querySelector('.font-medium')?.textContent.trim() : 'this item';
+        if (!window.confirm('Remove ' + (productName || 'this item') + ' from your cart?')) {
+            return;
+        }
+
+        const button = form.querySelector('button[type="submit"]');
+        if (button) button.disabled = true;
+
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: new FormData(form),
+            cache: 'no-store',
+        })
+            .then(function (resp) {
+                if (!resp.ok) throw new Error('Remove failed');
+                if (row) row.remove();
+                window.location.reload();
+            })
+            .catch(function () {
+                if (button) button.disabled = false;
+                alert('Could not remove item. Please try again.');
+            });
+    });
+})();
+</script>
+{% endblock %}

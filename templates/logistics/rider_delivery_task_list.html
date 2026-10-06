@@ -1,0 +1,60 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Delivery Tasks | Top Tech{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-12">
+    <h1 class="text-3xl font-bold text-gray-800 mb-1">Delivery Tasks</h1>
+    <p class="text-gray-500 mb-8">Orders assigned to you for final delivery.</p>
+
+    {% if messages %}
+        <div class="mb-6 space-y-2">
+            {% for message in messages %}
+                <p class="p-3 rounded-lg bg-green-50 text-green-700 text-sm">{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if tasks %}
+    <div class="space-y-3" id="deliveryTaskList">
+        {% for task in tasks %}
+        <div class="bg-white rounded-xl shadow p-5 flex flex-wrap items-center justify-between gap-3" data-task-row="{{ task.id }}">
+            <div>
+                <p class="font-semibold text-gray-800">Order {{ task.delivery.order.reference }}</p>
+                <span class="task-status-badge text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                    {{ task.get_status_display }}
+                </span>
+            </div>
+            {% if task.status == 'assigned' or task.status == 'en_route' %}
+            <form method="post" action="{% url 'logistics:rider_mark_delivered' task.id %}" class="delivery-confirm-form" data-ajax="true">
+                {% csrf_token %}
+                <button class="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 px-4 rounded-lg transition">
+                    Mark delivered
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-500">No delivery tasks assigned to you right now.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Spec section 34 - loading/success/error via the shared ajaxifyForm
+// helper; on success the row updates in place instead of a full reload.
+document.querySelectorAll(".delivery-confirm-form").forEach(function (form) {
+    window.ajaxifyForm(form, {
+        onSuccess: function (data, f) {
+            var row = f.closest("[data-task-row]");
+            row.querySelector(".task-status-badge").textContent = "Delivered";
+            row.querySelector(".task-status-badge").classList.add("bg-green-100", "text-green-700");
+            f.remove();
+        },
+    });
+});
+</script>
+{% endblock %}

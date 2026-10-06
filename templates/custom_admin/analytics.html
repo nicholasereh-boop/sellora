@@ -1,0 +1,187 @@
+{% extends 'custom_admin/base.html' %}
+{% load static %}
+{% load core_extras %}
+
+{% block title %}Admin Analytics{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+    <h1>Marketplace Analytics</h1>
+    <a href="{% url 'admin_dashboard' %}" class="btn-small primary">&larr; Back to Dashboard</a>
+</div>
+
+<div class="stats-grid">
+
+    <div class="card" style="grid-column: span 2;">
+        <h3>Marketplace Revenue (last 30 days)</h3>
+        {% if revenue_by_day.labels %}
+            <canvas id="revenueChart" height="200" role="img" aria-label="Marketplace revenue, last 30 days" aria-describedby="revenueChart-summary"></canvas>
+            <p id="revenueChart-summary" class="sr-only">{{ revenue_by_day.labels|length }} data points, from {{ revenue_by_day.labels.0 }} to {{ revenue_by_day.labels|last }}.</p>
+            <button type="button" class="chart-table-toggle" aria-expanded="false" aria-controls="revenueChart-table"
+                    onclick="var t=document.getElementById('revenueChart-table'); var hidden=t.classList.toggle('hidden'); this.setAttribute('aria-expanded', hidden ? 'false' : 'true'); this.textContent = hidden ? 'View as table' : 'Hide table';">View as table</button>
+            <div id="revenueChart-table" class="hidden table-container" style="margin-top:8px;">
+                <table class="admin-table"><caption class="sr-only">Marketplace revenue by day</caption>
+                    <thead><tr><th scope="col">Date</th><th scope="col">Revenue (₦)</th></tr></thead>
+                    <tbody>{% for label, value in revenue_by_day.labels|zip_lists:revenue_by_day.values %}<tr><td>{{ label }}</td><td>{{ value }}</td></tr>{% endfor %}</tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No paid orders in the last 30 days.</p>
+        {% endif %}
+    </div>
+
+    <div class="card" style="grid-column: span 2;">
+        <h3>Order Volume (last 30 days)</h3>
+        {% if orders_by_day.labels %}
+            <canvas id="ordersChart" height="200" role="img" aria-label="Order volume, last 30 days"></canvas>
+            <button type="button" class="chart-table-toggle" aria-expanded="false" aria-controls="ordersChart-table"
+                    onclick="var t=document.getElementById('ordersChart-table'); var hidden=t.classList.toggle('hidden'); this.setAttribute('aria-expanded', hidden ? 'false' : 'true'); this.textContent = hidden ? 'View as table' : 'Hide table';">View as table</button>
+            <div id="ordersChart-table" class="hidden table-container" style="margin-top:8px;">
+                <table class="admin-table"><caption class="sr-only">Order volume by day</caption>
+                    <thead><tr><th scope="col">Date</th><th scope="col">Orders</th></tr></thead>
+                    <tbody>{% for label, value in orders_by_day.labels|zip_lists:orders_by_day.values %}<tr><td>{{ label }}</td><td>{{ value }}</td></tr>{% endfor %}</tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No orders in the last 30 days.</p>
+        {% endif %}
+    </div>
+
+    <div class="card" style="grid-column: span 2;">
+        <h3>Revenue Distribution</h3>
+        <canvas id="distributionChart" height="200" role="img" aria-label="Revenue distribution: seller earnings, affiliate commissions, rider payments, platform revenue"></canvas>
+        <button type="button" class="chart-table-toggle" aria-expanded="false" aria-controls="distributionChart-table"
+                onclick="var t=document.getElementById('distributionChart-table'); var hidden=t.classList.toggle('hidden'); this.setAttribute('aria-expanded', hidden ? 'false' : 'true'); this.textContent = hidden ? 'View as table' : 'Hide table';">View as table</button>
+        <div id="distributionChart-table" class="hidden table-container" style="margin-top:8px;">
+            <table class="admin-table"><caption class="sr-only">Revenue distribution</caption>
+                <thead><tr><th scope="col">Category</th><th scope="col">Amount (₦)</th></tr></thead>
+                <tbody>{% for label, value in revenue_distribution.labels|zip_lists:revenue_distribution.values %}<tr><td>{{ label }}</td><td>{{ value }}</td></tr>{% endfor %}</tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" style="grid-column: span 2;">
+        <h3>Refund Trends (last 30 days)</h3>
+        {% if refunds_by_day.labels %}
+            <canvas id="refundsChart" height="200" role="img" aria-label="Refund requests, last 30 days"></canvas>
+            <button type="button" class="chart-table-toggle" aria-expanded="false" aria-controls="refundsChart-table"
+                    onclick="var t=document.getElementById('refundsChart-table'); var hidden=t.classList.toggle('hidden'); this.setAttribute('aria-expanded', hidden ? 'false' : 'true'); this.textContent = hidden ? 'View as table' : 'Hide table';">View as table</button>
+            <div id="refundsChart-table" class="hidden table-container" style="margin-top:8px;">
+                <table class="admin-table"><caption class="sr-only">Refund requests by day</caption>
+                    <thead><tr><th scope="col">Date</th><th scope="col">Refund requests</th></tr></thead>
+                    <tbody>{% for label, value in refunds_by_day.labels|zip_lists:refunds_by_day.values %}<tr><td>{{ label }}</td><td>{{ value }}</td></tr>{% endfor %}</tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No refund requests in the last 30 days.</p>
+        {% endif %}
+    </div>
+
+</div>
+
+<div class="table-container">
+    <h1>Seller Performance</h1>
+    {% if top_sellers.labels %}
+    <canvas id="sellersChart" height="220" role="img" aria-label="Seller performance ranking by earnings"></canvas>
+    <button type="button" class="chart-table-toggle" aria-expanded="false" aria-controls="sellersChart-table"
+            onclick="var t=document.getElementById('sellersChart-table'); var hidden=t.classList.toggle('hidden'); this.setAttribute('aria-expanded', hidden ? 'false' : 'true'); this.textContent = hidden ? 'View as table' : 'Hide table';">View as table</button>
+    <div id="sellersChart-table" class="hidden table-container" style="margin-top:8px;">
+        <table class="admin-table"><caption class="sr-only">Top sellers by earnings</caption>
+            <thead><tr><th scope="col">Seller</th><th scope="col">Earnings (₦)</th></tr></thead>
+            <tbody>{% for label, value in top_sellers.labels|zip_lists:top_sellers.values %}<tr><td>{{ label }}</td><td>{{ value }}</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>No seller earnings recorded yet.</p>
+    {% endif %}
+</div>
+
+<div class="table-container">
+    <h1>Affiliate Performance</h1>
+    <table class="admin-table">
+        <caption class="sr-only">Affiliate performance ranked by conversions</caption>
+        <thead>
+        <tr>
+            <th scope="col">Affiliate Code</th>
+            <th scope="col">Clicks</th>
+            <th scope="col">Conversions</th>
+            <th scope="col">Earnings</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for affiliate in top_affiliates %}
+        <tr>
+            <td>{{ affiliate.name }}</td>
+            <td>{{ affiliate.clicks }}</td>
+            <td>{{ affiliate.conversions }}</td>
+            <td>₦{{ affiliate.earnings }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4">No affiliate activity yet.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{{ revenue_by_day|json_script:"revenue-data" }}
+{{ orders_by_day|json_script:"orders-data" }}
+{{ refunds_by_day|json_script:"refunds-data" }}
+{{ revenue_distribution|json_script:"distribution-data" }}
+{{ top_sellers|json_script:"sellers-data" }}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+(function () {
+    function readJSON(id) {
+        var el = document.getElementById(id);
+        return el ? JSON.parse(el.textContent) : null;
+    }
+
+    var revenue = readJSON("revenue-data");
+    if (revenue && revenue.labels.length) {
+        new Chart(document.getElementById("revenueChart"), {
+            type: "line",
+            data: { labels: revenue.labels, datasets: [{ label: "Revenue (₦)", data: revenue.values, borderColor: "#4f46e5", backgroundColor: "rgba(79,70,229,0.1)", fill: true, tension: 0.3 }] },
+            options: { plugins: { legend: { display: false } } },
+        });
+    }
+
+    var orders = readJSON("orders-data");
+    if (orders && orders.labels.length) {
+        new Chart(document.getElementById("ordersChart"), {
+            type: "bar",
+            data: { labels: orders.labels, datasets: [{ label: "Orders", data: orders.values, backgroundColor: "#10b981" }] },
+            options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+        });
+    }
+
+    var distribution = readJSON("distribution-data");
+    if (distribution) {
+        new Chart(document.getElementById("distributionChart"), {
+            type: "doughnut",
+            data: { labels: distribution.labels, datasets: [{ data: distribution.values, backgroundColor: ["#4f46e5", "#f59e0b", "#10b981", "#6366f1"] }] },
+        });
+    }
+
+    var refunds = readJSON("refunds-data");
+    if (refunds && refunds.labels.length) {
+        new Chart(document.getElementById("refundsChart"), {
+            type: "bar",
+            data: { labels: refunds.labels, datasets: [{ label: "Refund Requests", data: refunds.values, backgroundColor: "#ef4444" }] },
+            options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+        });
+    }
+
+    var sellers = readJSON("sellers-data");
+    if (sellers && sellers.labels.length) {
+        new Chart(document.getElementById("sellersChart"), {
+            type: "bar",
+            data: { labels: sellers.labels, datasets: [{ label: "Earnings (₦)", data: sellers.values, backgroundColor: "#4f46e5" }] },
+            options: { indexAxis: "y", plugins: { legend: { display: false } } },
+        });
+    }
+})();
+</script>
+
+{% endblock %}

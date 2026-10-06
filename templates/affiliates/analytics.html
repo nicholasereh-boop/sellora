@@ -1,0 +1,226 @@
+{% extends 'core/base.html' %}
+{% load core_extras %}
+
+{% block title %}Affiliate Analytics | Top Tech{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-12">
+
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
+        <h1 class="text-3xl font-bold text-gray-800">Affiliate Dashboard</h1>
+        <div class="flex gap-1 bg-gray-100 rounded-lg p-1 text-xs font-semibold" role="group" aria-label="Analytics date range">
+            <button type="button" class="days-btn px-3 py-1 rounded-md {% if days == 7 %}bg-white shadow text-gray-800{% else %}text-gray-500{% endif %}" data-days="7" aria-pressed="{% if days == 7 %}true{% else %}false{% endif %}">7 days</button>
+            <button type="button" class="days-btn px-3 py-1 rounded-md {% if days == 30 %}bg-white shadow text-gray-800{% else %}text-gray-500{% endif %}" data-days="30" aria-pressed="{% if days == 30 %}true{% else %}false{% endif %}">30 days</button>
+            <button type="button" class="days-btn px-3 py-1 rounded-md {% if days == 90 %}bg-white shadow text-gray-800{% else %}text-gray-500{% endif %}" data-days="90" aria-pressed="{% if days == 90 %}true{% else %}false{% endif %}">90 days</button>
+        </div>
+    </div>
+    <p class="text-gray-500 mb-8">Code: <span class="font-semibold text-gray-700">{{ profile.affiliate_code }}</span></p>
+
+    {% include 'affiliates/_nav.html' with active='analytics' %}
+
+    <div id="analyticsError" class="hidden bg-red-50 text-red-600 text-sm rounded-lg p-3 mb-4">
+        Couldn't refresh analytics. <button type="button" id="analyticsRetry" class="underline">Retry</button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6" id="analyticsGrid">
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Clicks Over Time</h2>
+            <div class="relative chart-box" style="min-height:220px;">
+                <div class="chart-loading hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading&hellip;
+                </div>
+                <p class="chart-empty {% if analytics.clicks_by_day.labels %}hidden{% endif %} text-sm text-gray-400 py-16 text-center">No clicks in this period.</p>
+                <canvas id="clicksChart" height="220" role="img" aria-label="Clicks over time" class="{% if not analytics.clicks_by_day.labels %}hidden{% endif %}"></canvas>
+                {% chart_data_table "clicksChart" "Clicks Over Time" analytics.clicks_by_day.labels analytics.clicks_by_day.values "Clicks" %}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Conversions</h2>
+            <div class="relative chart-box" style="min-height:220px;">
+                <div class="chart-loading hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading&hellip;
+                </div>
+                <p class="chart-empty {% if analytics.conversions_by_day.labels %}hidden{% endif %} text-sm text-gray-400 py-16 text-center">No conversions in this period.</p>
+                <canvas id="conversionsChart" height="220" role="img" aria-label="Conversions over time" class="{% if not analytics.conversions_by_day.labels %}hidden{% endif %}"></canvas>
+                {% chart_data_table "conversionsChart" "Conversions Over Time" analytics.conversions_by_day.labels analytics.conversions_by_day.values "Conversions" %}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Earnings</h2>
+            <div class="relative chart-box" style="min-height:220px;">
+                <div class="chart-loading hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading&hellip;
+                </div>
+                <canvas id="earningsChart" height="220" role="img" aria-label="Earnings breakdown: pending, available, withdrawn"></canvas>
+                {% chart_data_table "earningsChart" "Earnings Breakdown" analytics.earnings_breakdown.labels analytics.earnings_breakdown.values "Amount (₦)" %}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Top Products</h2>
+            <div class="relative chart-box" style="min-height:220px;">
+                <div class="chart-loading hidden absolute inset-0 flex items-center justify-center text-sm text-gray-400">
+                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading&hellip;
+                </div>
+                <p class="chart-empty {% if analytics.top_products.labels %}hidden{% endif %} text-sm text-gray-400 py-16 text-center">No conversions yet.</p>
+                <canvas id="topProductsChart" height="220" role="img" aria-label="Top products by earnings" class="{% if not analytics.top_products.labels %}hidden{% endif %}"></canvas>
+                {% chart_data_table "topProductsChart" "Top Products" analytics.top_products.labels analytics.top_products.values "Earnings (₦)" %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{{ analytics.clicks_by_day|json_script:"clicks-data" }}
+{{ analytics.conversions_by_day|json_script:"conversions-data" }}
+{{ analytics.earnings_breakdown|json_script:"earnings-data" }}
+{{ analytics.top_products|json_script:"top-products-data" }}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+(function () {
+    var BASE_OPTIONS = { responsive: true, maintainAspectRatio: false };
+    var charts = {};
+
+    function readJSON(id) {
+        var el = document.getElementById(id);
+        return el ? JSON.parse(el.textContent) : null;
+    }
+
+    function box(canvasId) {
+        return document.getElementById(canvasId).closest(".chart-box");
+    }
+
+    function setLoading(canvasId, isLoading) {
+        box(canvasId).querySelector(".chart-loading").classList.toggle("hidden", !isLoading);
+    }
+
+    function updateDataTable(canvasId, data, valueLabel) {
+        var tableEl = document.getElementById(canvasId + "-table");
+        if (!tableEl) return;
+        var tbody = tableEl.querySelector("tbody");
+        var summary = document.getElementById(canvasId + "-summary");
+        var count = (data && data.labels) ? data.labels.length : 0;
+
+        if (summary) {
+            summary.textContent = summary.textContent.replace(/: \d+ data point/, ": " + count + " data point");
+        }
+
+        if (!count) {
+            tbody.innerHTML = '<tr><td colspan="2" class="px-3 py-2 text-gray-400">No data.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.labels.map(function (label, i) {
+            return "<tr><td class=\"px-3 py-2\">" + label + "</td><td class=\"px-3 py-2 font-medium\">" + data.values[i] + "</td></tr>";
+        }).join("");
+    }
+
+    function renderLineOrBar(canvasId, type, data, label, color) {
+        var canvas = document.getElementById(canvasId);
+        var empty = box(canvasId).querySelector(".chart-empty");
+        if (charts[canvasId]) { charts[canvasId].destroy(); charts[canvasId] = null; }
+        updateDataTable(canvasId, data, label);
+
+        if (!data || !data.labels || !data.labels.length) {
+            canvas.classList.add("hidden");
+            if (empty) empty.classList.remove("hidden");
+            return;
+        }
+        canvas.classList.remove("hidden");
+        if (empty) empty.classList.add("hidden");
+
+        charts[canvasId] = new Chart(canvas, {
+            type: type,
+            data: {
+                labels: data.labels,
+                datasets: [type === "line"
+                    ? { label: label, data: data.values, borderColor: color, backgroundColor: color + "1a", fill: true, tension: 0.3 }
+                    : { label: label, data: data.values, backgroundColor: color }],
+            },
+            options: Object.assign({}, BASE_OPTIONS, {
+                plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+            }),
+        });
+    }
+
+    function renderAll(analytics) {
+        renderLineOrBar("clicksChart", "line", analytics.clicks_by_day, "Clicks", "#4f46e5");
+        renderLineOrBar("conversionsChart", "bar", analytics.conversions_by_day, "Conversions", "#10b981");
+        renderLineOrBar("topProductsChart", "bar", analytics.top_products, "Earnings (₦)", "#4f46e5");
+
+        if (charts.earningsChart) charts.earningsChart.destroy();
+        charts.earningsChart = new Chart(document.getElementById("earningsChart"), {
+            type: "bar",
+            data: {
+                labels: analytics.earnings_breakdown.labels,
+                datasets: [{ label: "Earnings (₦)", data: analytics.earnings_breakdown.values, backgroundColor: ["#f59e0b", "#10b981", "#6366f1"] }],
+            },
+            options: Object.assign({}, BASE_OPTIONS, { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }),
+        });
+        updateDataTable("earningsChart", analytics.earnings_breakdown, "Amount (₦)");
+    }
+
+    // First paint from server-rendered data - no extra request on load.
+    renderAll({
+        clicks_by_day: readJSON("clicks-data"),
+        conversions_by_day: readJSON("conversions-data"),
+        earnings_breakdown: readJSON("earnings-data"),
+        top_products: readJSON("top-products-data"),
+    });
+
+    var dataUrl = "{% url 'affiliates:analytics_data' %}";
+    var errorBox = document.getElementById("analyticsError");
+
+    function loadForDays(days) {
+        ["clicksChart", "conversionsChart", "earningsChart", "topProductsChart"].forEach(function (id) {
+            setLoading(id, true);
+        });
+        errorBox.classList.add("hidden");
+
+        fetch(dataUrl + "?days=" + encodeURIComponent(days), {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            cache: "no-store",
+        })
+            .then(function (resp) {
+                if (!resp.ok) throw new Error("bad response");
+                return resp.json();
+            })
+            .then(function (data) {
+                ["clicksChart", "conversionsChart", "earningsChart", "topProductsChart"].forEach(function (id) {
+                    setLoading(id, false);
+                });
+                renderAll(data);
+            })
+            .catch(function () {
+                ["clicksChart", "conversionsChart", "earningsChart", "topProductsChart"].forEach(function (id) {
+                    setLoading(id, false);
+                });
+                errorBox.classList.remove("hidden");
+            });
+    }
+
+    document.querySelectorAll(".days-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            document.querySelectorAll(".days-btn").forEach(function (b) {
+                b.classList.remove("bg-white", "shadow", "text-gray-800");
+                b.classList.add("text-gray-500");
+                b.setAttribute("aria-pressed", "false");
+            });
+            btn.classList.add("bg-white", "shadow", "text-gray-800");
+            btn.classList.remove("text-gray-500");
+            btn.setAttribute("aria-pressed", "true");
+            loadForDays(btn.dataset.days);
+        });
+    });
+
+    document.getElementById("analyticsRetry").addEventListener("click", function () {
+        var active = document.querySelector(".days-btn[aria-pressed='true']");
+        loadForDays(active ? active.dataset.days : 30);
+    });
+})();
+</script>
+{% endblock %}

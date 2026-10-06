@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Sellora design system
+  ---------------------
+  Two zones, one brand:
+    - Storefront (buyer-facing): warm paper, ink text, serif headlines
+      for product names and prices - an editorial market-guide feel.
+    - Seller/affiliate dashboards: a dark "control room" - confident,
+      numbers-first, indigo/marigold instead of the generic SaaS grey-
+      card-with-shadow kit.
+  Fraunces carries personality on display numbers and headings; Inter
+  carries everything functional (labels, forms, body copy).
+*/
+
+:root {
+  --focus-ring: 0 0 0 2px theme("colors.marigold");
+
+  /* Dashboard palette (RGB triplets) - dark "control room" by default,
+     used by the admin and affiliate dashboards. */
+  --c-canvas: 20 18 43;
+  --c-surface: 29 26 61;
+  --c-surface-line: 50 44 99;
+  --c-mist: 237 234 247;
+  --c-mist-soft: 169 164 201;
+}
+
+/* Light dashboard theme - opt-in per layout (seller + rider). White page,
+   barely-tinted cards, dark indigo text. Same tokens, different values, so
+   every dash-* class and bg-canvas/bg-surface/text-mist utility follows. */
+.dash-light {
+  --c-canvas: 255 255 255;
+  --c-surface: 247 247 251;
+  --c-surface-line: 226 226 238;
+  --c-mist: 27 25 56;
+  --c-mist-soft: 98 94 130;
+}
+/* Text that sits ON a marigold fill used the page colour (canvas); keep it
+   dark now that canvas is white. Marigold used as text colour gets a
+   deeper amber so it stays readable on white. */
+.dash-light .text-canvas {
+  color: rgb(20 18 43);
+}
+.dash-light .text-marigold {
+  color: #b7790a;
+}
+.dash-light .dash-btn-primary {
+  color: rgb(20 18 43);
+}
+
+html,
+body {
+  background: theme("colors.paper");
+  color: theme("colors.ink");
+}
+
+body {
+  font-family: theme("fontFamily.sans");
+}
+
+.font-display {
+  font-family: theme("fontFamily.display");
+  font-feature-settings: "ss01" 1;
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 2px;
+}
+
+/* Dashboard building blocks (seller + affiliate control rooms) */
+.dash-card {
+  background: theme("colors.surface");
+  border: 1px solid theme("colors.surface-line");
+  border-radius: 0.75rem;
+}
+
+.dash-input {
+  background: theme("colors.canvas");
+  border: 1px solid theme("colors.surface-line");
+  border-radius: 0.5rem;
+  color: theme("colors.mist");
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  width: 100%;
+}
+.dash-input:focus {
+  outline: none;
+  border-color: theme("colors.indigo.DEFAULT");
+}
+.dash-input::placeholder {
+  color: theme("colors.mist-soft");
+}
+
+.dash-label {
+  display: block;
+  font-size: 0.8rem;
+  color: theme("colors.mist-soft");
+  margin-bottom: 0.35rem;
+}
+
+.dash-btn-primary {
+  background: theme("colors.marigold");
+  color: theme("colors.canvas");
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.875rem;
+  transition: opacity 0.15s;
+}
+.dash-btn-primary:hover {
+  opacity: 0.9;
+}
+.dash-btn-primary:disabled {
+  opacity: 0.5;
+}
+
+.dash-btn-ghost {
+  color: theme("colors.mist-soft");
+  font-size: 0.875rem;
+}
+.dash-btn-ghost:hover {
+  color: theme("colors.mist");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
